@@ -3,7 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
-const { sendMail } = require('./utils/mailer');
+const { sendMail } = require('./utils/mailer'); // Keep your existing mailer structure
 const upload = require('./middleware/upload');
 const errorHandler = require('./middleware/errorHandler');
 
@@ -18,21 +18,23 @@ app.use((req, res, next) => {
     next();
 });
 
-// CORS
+// --- FIXED CORS CONFIGURATION ---
 const allowedOrigins = [
-    'https://luz-lens.vercel.app',
-    process.env.FRONTEND_URL,
-    'http://127.0.0.1:5500',
+    'https://luz-lens.vercel.app',       // Your Vercel Frontend
+    process.env.FRONTEND_URL,            // Environment variable backup
+    'http://127.0.0.1:5500',             // Local Development
     'http://localhost:3000'
 ].filter(Boolean);
 
 app.use(cors({
     origin: function (origin, callback) {
+        // Allow requests with no origin (like mobile apps or Postman)
         if (!origin) return callback(null, true);
-        if (allowedOrigins.includes(origin)) {
+        
+        if (allowedOrigins.indexOf(origin) !== -1) {
             callback(null, true);
         } else {
-            console.log("Blocked by CORS:", origin);
+            console.log("⚠️ Blocked by CORS:", origin);
             callback(new Error('Not allowed by CORS'));
         }
     },
@@ -44,21 +46,23 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// Static files (needed for email attachments)
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Ensure uploads folder exists
+// Ensure uploads directory exists
 const uploadDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-// Upload
+// --- FIXED UPLOAD ENDPOINT ---
 app.post('/upload', upload.single('file'), (req, res, next) => {
     try {
+        // 1. Validation
         if (req.fileValidationError) {
             return res.status(400).json({ error: req.fileValidationError });
         }
-
+        
         const { name, email } = req.body;
         if (!name || !email) {
             return res.status(400).json({ error: 'Name and email are required' });
@@ -68,6 +72,8 @@ app.post('/upload', upload.single('file'), (req, res, next) => {
             return res.status(400).json({ error: 'Please upload a file' });
         }
 
+        // 2. CRITICAL FIX: SEND SUCCESS RESPONSE FIRST
+        // We reply to the user immediately. The email happens later.
         res.status(200).json({
             message: 'File uploaded successfully',
             file: {
@@ -78,10 +84,12 @@ app.post('/upload', upload.single('file'), (req, res, next) => {
             }
         });
 
+        // 3. BACKGROUND EMAIL PROCESS
+        // Prepare email content
         const mailOptions = {
-            to: process.env.OWNER_EMAIL,
+            to: process.env.OWNER_EMAIL, 
             subject: 'New Upload - Luz&Lens',
-            text: `Uploader: ${name} (${email})\nFile: ${req.file.originalname}\nSize: ${(req.file.size / 1024).toFixed(2)} KB`,
+            text: `New file uploaded:\n\nUploader: ${name} (${email})\nFile: ${req.file.originalname}\nSize: ${(req.file.size / 1024).toFixed(2)} KB`,
             html: `
                 <div style="font-family: Arial, sans-serif;">
                     <h2 style="color: #2c3e50;">New Upload - Luz&Lens</h2>
@@ -107,25 +115,22 @@ app.post('/upload', upload.single('file'), (req, res, next) => {
             ]
         };
 
+        // Send email without 'await' so it doesn't block
         sendMail(mailOptions)
-            .then(() => console.log(`Email sent for ${req.file.originalname}`))
-            .catch(err => console.error("Email Failed:", err.message));
+            .then(() => console.log(`📧 Email sent successfully for ${req.file.originalname}`))
+            .catch(err => console.error("⚠️ Background Email Failed:", err.message));
 
     } catch (error) {
+        console.error('Upload route error:', error);
         next(error);
     }
 });
 
-// Upload multiple
+// Upload Multiple Endpoint (Kept as is)
 app.post('/upload-multiple', upload.array('files', 5), (req, res, next) => {
     try {
-        if (req.fileValidationError) {
-            return res.status(400).json({ error: req.fileValidationError });
-        }
-
-        if (!req.files || req.files.length === 0) {
-            return res.status(400).json({ error: 'Please upload at least one file' });
-        }
+        if (req.fileValidationError) return res.status(400).json({ error: req.fileValidationError });
+        if (!req.files || req.files.length === 0) return res.status(400).json({ error: 'Please upload at least one file' });
 
         res.json({
             message: 'Files uploaded successfully',
@@ -135,16 +140,17 @@ app.post('/upload-multiple', upload.array('files', 5), (req, res, next) => {
                 size: file.size
             }))
         });
-
     } catch (error) {
         next(error);
     }
 });
 
+// Test Endpoint
 app.get('/', (req, res) => {
     res.send('Backend is running');
 });
 
+// 404 handler
 app.use((req, res) => {
     res.status(404).json({ error: 'Not Found' });
 });
