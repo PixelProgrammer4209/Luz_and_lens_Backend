@@ -1,18 +1,12 @@
 const nodemailer = require('nodemailer');
 require('dotenv').config();
 
-// Create transporter with robust Gmail settings
+// Using 'service: "gmail"' automatically sets port to 465 and secure to true
 const transporter = nodemailer.createTransport({
-  host: process.env.MAIL_HOST || 'smtp.gmail.com', // Default to Gmail if missing
-  port: process.env.MAIL_PORT || 587,
-  secure: process.env.MAIL_PORT == 465, // True for 465, false for 587
+  service: 'gmail',
   auth: {
-    user: process.env.MAIL_USER,
-    pass: process.env.MAIL_PASS,
-  },
-  // This setting fixes "self signed certificate" issues often seen on Render
-  tls: {
-    rejectUnauthorized: false
+    user: process.env.MAIL_USER, 
+    pass: process.env.MAIL_PASS, 
   }
 });
 
@@ -21,8 +15,11 @@ const transporter = nodemailer.createTransport({
  */
 async function sendMail({ to, subject, text, html, attachments }) {
   try {
+    // Optional: Verify connection before sending
+    // await transporter.verify(); 
+    
     const info = await transporter.sendMail({
-      from: process.env.MAIL_FROM || process.env.MAIL_USER, // Fallback to user if FROM is missing
+      from: process.env.MAIL_FROM || process.env.MAIL_USER,
       to,
       subject,
       text,
@@ -31,7 +28,7 @@ async function sendMail({ to, subject, text, html, attachments }) {
     });
     return info;
   } catch (error) {
-    console.error('Error sending email:', error);
+    console.error('❌ Email Transporter Error:', error.message);
     throw error;
   }
 }
