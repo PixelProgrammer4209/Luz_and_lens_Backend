@@ -1,13 +1,19 @@
 const nodemailer = require('nodemailer');
 require('dotenv').config();
 
-// Using 'service: "gmail"' automatically sets port to 465 and secure to true
+// We are switching to explicit host/port configuration for better stability
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
+  host: 'smtp.gmail.com',
+  port: 465,
+  secure: true, // true for 465, false for other ports
   auth: {
     user: process.env.MAIL_USER, 
     pass: process.env.MAIL_PASS, 
-  }
+  },
+  // Adding connection timeout settings to fail faster if issues persist
+  connectionTimeout: 10000, // 10 seconds
+  greetingTimeout: 10000,
+  socketTimeout: 10000
 });
 
 /**
@@ -15,11 +21,12 @@ const transporter = nodemailer.createTransport({
  */
 async function sendMail({ to, subject, text, html, attachments }) {
   try {
-    // Optional: Verify connection before sending
-    // await transporter.verify(); 
-    
+    // Verify connection configuration
+    await transporter.verify(); 
+    console.log("✅ SMTP Connection Established");
+
     const info = await transporter.sendMail({
-      from: process.env.MAIL_FROM || process.env.MAIL_USER,
+      from: `Luz & Lens <${process.env.MAIL_USER}>`, // Professional formatting
       to,
       subject,
       text,
